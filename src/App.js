@@ -1,13 +1,32 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./App.css";
 
 function App() {
-  const [notes, setNotes] = useState([]);
+  // Load notes from localStorage on first render
+  const [notes, setNotes] = useState(() => {
+    try {
+      const saved = localStorage.getItem("ssn-notes");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Failed to load notes from localStorage", e);
+      return [];
+    }
+  });
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [filterText, setFilterText] = useState("");
   const [focusMinutes] = useState(25); // for future timer
   const [totalStudyTime] = useState("5h 30m"); // placeholder for now
+
+  // Save notes to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem("ssn-notes", JSON.stringify(notes));
+    } catch (e) {
+      console.error("Failed to save notes to localStorage", e);
+    }
+  }, [notes]);
 
   const handleAddNote = (e) => {
     e.preventDefault();
