@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import "./App.css";
 
 function App() {
-  // Load notes from localStorage on first render
+  // ---- Notes state (with localStorage) ----
   const [notes, setNotes] = useState(() => {
     try {
       const saved = localStorage.getItem("ssn-notes");
@@ -16,8 +16,15 @@ function App() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [filterText, setFilterText] = useState("");
-  const [focusMinutes] = useState(25); // for future timer
-  const [totalStudyTime] = useState("5h 30m"); // placeholder for now
+
+  // ---- Focus timer state (custom minutes) ----
+  const [focusMinutes, setFocusMinutes] = useState(25); // current timer length
+  const [focusSecondsLeft, setFocusSecondsLeft] = useState(25 * 60);
+  const [isFocusing, setIsFocusing] = useState(false);
+  const [focusMinutesInput, setFocusMinutesInput] = useState("25"); // input box value
+
+  // Placeholder for weekly time (we’ll improve later)
+  const [totalStudyTime] = useState("5h 30m");
 
   // Save notes to localStorage whenever they change
   useEffect(() => {
@@ -27,6 +34,31 @@ function App() {
       console.error("Failed to save notes to localStorage", e);
     }
   }, [notes]);
+
+  // Focus timer ticking effect
+  useEffect(() => {
+    if (!isFocusing) return;
+
+    const id = setInterval(() => {
+      setFocusSecondsLeft((prev) => {
+        if (prev <= 1) {
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, [isFocusing]);
+
+  // Stop timer automatically at 0
+  useEffect(() => {
+    if (focusSecondsLeft === 0 && isFocusing) {
+      setIsFocusing(false);
+    }
+  }, [focusSecondsLeft, isFocusing]);
+
+  // ---- Handlers ----
 
   const handleAddNote = (e) => {
     e.preventDefault();
@@ -40,7 +72,7 @@ function App() {
       isDone: false,
     };
 
-    setNotes([newNote, ...notes]);
+    setNotes((prev) => [newNote, ...prev]);
     setTitle("");
     setContent("");
   };
@@ -57,11 +89,49 @@ function App() {
     setNotes((prev) => prev.filter((note) => note.id !== id));
   };
 
+  const handleToggleFocus = () => {
+    // If finished (00:00), restart from current focusMinutes
+    if (focusSecondsLeft === 0) {
+      setFocusSecondsLeft(focusMinutes * 60);
+    }
+    setIsFocusing((prev) => !prev);
+  };
+
+  const handleResetFocus = () => {
+    setIsFocusing(false);
+    setFocusSecondsLeft(focusMinutes * 60);
+  };
+
+  const handleApplyFocusMinutes = () => {
+    const mins = parseInt(focusMinutesInput, 10);
+    if (isNaN(mins) || mins <= 0) {
+      return;
+    }
+    const limited = Math.min(mins, 180); // limit to 3 hours max
+    setFocusMinutes(limited);
+    setFocusSecondsLeft(limited * 60);
+    setIsFocusing(false);
+  };
+
   const filteredNotes = notes.filter(
     (note) =>
       note.title.toLowerCase().includes(filterText.toLowerCase()) ||
       note.content.toLowerCase().includes(filterText.toLowerCase())
   );
+
+  // Format timer display as MM:SS
+  const focusMinutesDisplay = String(
+    Math.floor(focusSecondsLeft / 60)
+  ).padStart(2, "0");
+  const focusSecondsDisplay = String(
+    focusSecondsLeft % 60
+  ).padStart(2, "0");
+
+  const focusButtonLabel = isFocusing
+    ? "Pause"
+    : focusSecondsLeft === 0
+    ? "Restart"
+    : "Start focus session";
 
   return (
     <div className="app">
@@ -91,13 +161,75 @@ function App() {
           <div className="dash-card">
             <div className="dash-label">Smart study mode</div>
             <div className="dash-timer">
-              {focusMinutes.toString().padStart(2, "0")}:00
+              {focusMinutesDisplay}:{focusSecondsDisplay}
             </div>
-            <button className="primary-btn" type="button">
-              Start focus session
-            </button>
+
+            {/* Custom minutes input */}
+            <div
+              style={{
+                marginTop: "8px",
+                display: "flex",
+                gap: "8px",
+                alignItems: "center",
+              }}
+            >
+              <input
+                type="number"
+                min="1"
+                max="180"
+                value={focusMinutesInput}
+                onChange={(e) => setFocusMinutesInput(e.target.value)}
+                style={{
+                  width: "80px",
+                  borderRadius: "999px",
+                  border: "1px solid #dedede",
+                  padding: "6px 10px",
+                  fontSize: "0.85rem",
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleApplyFocusMinutes}
+                style={{
+                  borderRadius: "999px",
+                  border: "none",
+                  padding: "6px 12px",
+                  fontSize: "0.8rem",
+                  background: "#e5e7eb",
+                  cursor: "pointer",
+                }}
+              >
+                Set time (min)
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+              <button
+                className="primary-btn"
+                type="button"
+                onClick={handleToggleFocus}
+              >
+                {focusButtonLabel}
+              </button>
+              <button
+                type="button"
+                onClick={handleResetFocus}
+                style={{
+                  borderRadius: "999px",
+                  border: "none",
+                  padding: "6px 12px",
+                  fontSize: "0.8rem",
+                  background: "#e5e7eb",
+                  cursor: "pointer",
+                }}
+              >
+                Reset
+              </button>
+            </div>
+
             <p className="dash-hint">
-              Later this will become a real timer with reflection notes.
+              Type your focus length in minutes, set it, then use the timer for
+              deep work sessions.
             </p>
           </div>
 
@@ -105,7 +237,8 @@ function App() {
             <div className="dash-label">This week</div>
             <div className="dash-stat">{totalStudyTime}</div>
             <p className="dash-hint">
-              Track total focused study time across topics.
+              Later we can connect this to real focus sessions and show total
+              study time.
             </p>
           </div>
         </section>
